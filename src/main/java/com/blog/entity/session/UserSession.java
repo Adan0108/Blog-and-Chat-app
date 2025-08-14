@@ -2,9 +2,14 @@ package com.blog.entity.session;
 
 import com.blog.entity.user.User;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.time.Instant;
 import java.util.UUID;
 
+@Getter @Setter @NoArgsConstructor
 @Entity @Table(name = "user_sessions", indexes = {
         @Index(name = "ix_us_user", columnList = "user_id"),
         @Index(name = "ix_us_expires", columnList = "expires_at"),
@@ -37,7 +42,4 @@ public class UserSession {
 
     @Column(nullable = false)
     private Instant expiresAt;
-
-    // getters/setters
 }
-

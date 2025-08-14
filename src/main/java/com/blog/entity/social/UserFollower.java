@@ -27,7 +27,6 @@ public class UserFollower {
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
-    // getters/setters
     public User getFollower() { return follower; }
     public void setFollower(User follower) { this.follower = follower; }
     public User getFollowing() { return following; }

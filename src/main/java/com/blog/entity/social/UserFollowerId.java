@@ -14,7 +14,6 @@ public class UserFollowerId implements Serializable {
         this.following = following;
     }
 
-    // (optional) getters/setters if you prefer
     public Long getFollower() { return follower; }
     public void setFollower(Long follower) { this.follower = follower; }
     public Long getFollowing() { return following; }

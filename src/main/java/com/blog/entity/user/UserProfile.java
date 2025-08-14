@@ -3,7 +3,12 @@ package com.blog.entity.user;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
 @Entity @Table(name = "user_profiles", indexes = {
         @Index(name = "ix_user_profiles_username", columnList = "username", unique = true),
         @Index(name = "ix_user_profiles_mobile", columnList = "mobile", unique = true)
