@@ -1,0 +1,51 @@
+server:
+  port: 8001
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+
+spring:
+  application:
+    name: blog
+  datasource:
+    url: jdbc:mysql://localhost:3306/blogApp
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    database: mysql
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comment: true
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: xxxx@gmail.com
+    password: xxxx
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: "*"
+        debug: true
+#  security:
+#    user:
+#      password: root
+#      name: root
+#      roles:
+#        - admin
+#        - user
+
+#  profiles:
+#    active: pro
+
