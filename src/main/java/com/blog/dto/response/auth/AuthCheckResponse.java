@@ -1,4 +1,3 @@
 package com.blog.dto.response.auth;
 
-public class AuthCheckResponse {
-}
+public record AuthCheckResponse(boolean loggedIn, Long userId, String email, String username) {}

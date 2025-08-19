@@ -1,8 +1,10 @@
+// src/main/java/com/blog/config/SecurityConfig.java
 package com.blog.config;
 
 import com.blog.config.security.AccessTokenFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod; // <-- import this
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,13 +19,15 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain apiChain(HttpSecurity http, AccessTokenFilter accessTokenFilter) throws Exception {
-        http
-                // IMPORTANT: bind this chain to your API paths
-                .securityMatcher("/api/**")
-                .csrf(csrf -> csrf.disable()) // stateless API → no CSRF
+        http.securityMatcher("/api/**")
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/auth/signup",
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/refresh"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(accessTokenFilter, UsernamePasswordAuthenticationFilter.class);

@@ -36,21 +36,18 @@ public class AccessTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // guarantees this filter NEVER runs on open auth endpoints
-        String path = request.getServletPath(); // e.g. "/api/v1/auth/signup"
-        return path.startsWith("/api/v1/auth/");
+        String path = request.getServletPath();  // "/api/v1/auth/login"
+        String method = request.getMethod();
+        return "POST".equalsIgnoreCase(method) &&
+                ("/api/v1/auth/signup".equals(path) ||
+                        "/api/v1/auth/login".equals(path)  ||
+                        "/api/v1/auth/refresh".equals(path));
     }
 
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
-
-        String uri = req.getRequestURI();
-        if (uri.startsWith("/api/v1/auth/")) { // open endpoints
-            chain.doFilter(req, res);
-            return;
-        }
 
         String uidStr = req.getHeader(HDR_CLIENT_ID);
         String auth   = req.getHeader(HDR_AUTHZ);
