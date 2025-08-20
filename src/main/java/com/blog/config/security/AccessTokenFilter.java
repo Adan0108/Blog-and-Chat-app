@@ -59,6 +59,11 @@ public class AccessTokenFilter extends OncePerRequestFilter {
         var kpOpt = keypairs.findByUserId(userId);
         if (kpOpt.isEmpty()) { res.setStatus(401); return; }
 
+        if ("OPTIONS".equalsIgnoreCase(req.getMethod())) {
+            chain.doFilter(req, res);
+            return;
+        }
+
         try {
             String token = auth.startsWith("Bearer ") ? auth.substring(7) : auth.trim();
             var jws = JwtUtil.verifyAccess(token, kpOpt.get().getPublicKey());
