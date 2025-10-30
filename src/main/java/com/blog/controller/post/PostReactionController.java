@@ -22,8 +22,8 @@ public class PostReactionController {
     @PostMapping("/{id}/reactions")
     public ResponseEntity<ReactionDto> react(@PathVariable Long id,
                                              @RequestBody(required = false) ReactionRequest req) {
-        String type = (req == null || req.type() == null) ? "LIKE" : req.type();
-        var dto = posts.react(currentUserId(), id, type);
+        short typeId = (req == null || req.type() == null) ? 1 : req.type(); // default LIKE=1
+        var dto = posts.react(currentUserId(), id, typeId);
         return ResponseEntity.ok(dto);
     }
 

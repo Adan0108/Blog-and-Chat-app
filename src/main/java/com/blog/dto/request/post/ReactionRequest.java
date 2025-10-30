@@ -1,4 +1,3 @@
 package com.blog.dto.request.post;
 
-public class ReactionRequest {
-}
+public record ReactionRequest(Short type) { }

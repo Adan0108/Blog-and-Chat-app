@@ -1,4 +1,6 @@
 package com.blog.repository.reaction;
 
-public class ReactionTypeRepository {
-}
+import com.blog.entity.reaction.ReactionType;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ReactionTypeRepository extends JpaRepository<ReactionType, Short> { }

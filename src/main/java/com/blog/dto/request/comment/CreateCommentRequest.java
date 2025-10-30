@@ -1,4 +1,3 @@
-package com.blog.dto.response.comment;
+package com.blog.dto.request.comment;
 
-public class CreateCommentRequest {
-}
+public record CreateCommentRequest(String text) {}

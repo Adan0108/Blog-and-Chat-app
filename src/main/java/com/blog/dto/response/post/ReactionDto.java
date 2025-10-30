@@ -1,4 +1,10 @@
 package com.blog.dto.response.post;
 
-public class ReactionDto {
-}
+public record ReactionDto(
+        Long postId,
+        Long userId,
+        Short typeId,
+        String typeName,
+        String iconUrl,
+        long totalCount
+) { }

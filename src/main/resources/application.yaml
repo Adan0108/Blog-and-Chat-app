@@ -13,6 +13,12 @@ spring:
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}   # leave empty for local/dev
+      timeout: 2s                    # nice small timeout
   jpa:
     database: mysql
     show-sql: true
