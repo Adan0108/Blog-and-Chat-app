@@ -137,27 +137,27 @@ public class PostServiceImpl implements PostService {
         limit = Math.max(1, Math.min(limit, 50));
 
         boolean isOwner = Objects.equals(requesterId, profileUserId);
-
         List<Post> result;
         if (isOwner) {
             result = posts.findByAuthorIdAndCreatedAtBeforeOrderByCreatedAtDesc(
-                    profileUserId,
-                    cursor,
-                    PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))
+                    profileUserId, cursor, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))
             );
         } else {
-            boolean friend = followers.existsFriendOrBestFriend(requesterId, profileUserId);
-            Collection<Visibility> allowed = friend
+            boolean isFriend = followers.isFriend(requesterId, profileUserId);
+            boolean isBestFriend = followers.isBestFriend(requesterId, profileUserId);
+
+            Collection<Visibility> allowed = isBestFriend
+                    ? List.of(Visibility.PUBLIC, Visibility.FRIENDS, Visibility.BEST_FRIEND)
+                    : (isFriend
                     ? List.of(Visibility.PUBLIC, Visibility.FRIENDS)
-                    : List.of(Visibility.PUBLIC);
+                    : List.of(Visibility.PUBLIC));
 
             result = posts.findByAuthorIdAndVisibilityInAndCreatedAtBeforeOrderByCreatedAtDesc(
-                    profileUserId,
-                    allowed,
-                    cursor,
+                    profileUserId, allowed, cursor,
                     PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"))
             );
         }
+
 
         return result.stream().map(this::toDto).toList();
     }
@@ -169,102 +169,6 @@ public class PostServiceImpl implements PostService {
         if (!canSee(requesterId, p)) throw new IllegalStateException("Not allowed");
         return toDto(p);
     }
-
-    // ---------- NEW: reactions ----------
-    @Override
-    @Transactional
-    public ReactionDto react(Long userId, Long postId, short reactionTypeId) {
-        if (userId == null) throw new IllegalStateException("Unauthenticated");
-
-        var post = posts.findById(postId).orElseThrow(() -> new IllegalArgumentException("Post not found"));
-        var user = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found"));
-        var type = reactionTypes.findById(reactionTypeId)
-                .orElseThrow(() -> new IllegalArgumentException("Reaction type not found"));
-
-        var existing = reactions.findByPost_IdAndUser_Id(postId, userId);
-
-        if (existing.isPresent()) {
-            var pr = existing.get();
-            if (!pr.getType().getId().equals(type.getId())) {
-                pr.setType(type);
-            }
-        } else {
-            var pr = new PostReaction();
-            pr.setPost(post);
-            pr.setUser(user);
-            pr.setType(type);
-            reactions.save(pr);
-        }
-
-        long total = reactions.countByPost_Id(postId);
-        return new ReactionDto(
-                postId,
-                userId,
-                type.getId(),
-                type.getName(),
-                type.getIconUrl(),
-                total
-        );
-    }
-
-    @Override
-    @Transactional
-    public void unreact(Long userId, Long postId) {
-        if (userId == null) throw new IllegalStateException("Unauthenticated");
-        reactions.deleteByPost_IdAndUser_Id(postId, userId);
-    }
-
-
-    // ---------- comments (insert + read-back) ----------
-    @Override
-    public CommentDto addComment(Long userId, Long postId, String text) {
-        Post post = posts.findById(postId).orElseThrow();
-        if (!canSee(userId, post)) throw new IllegalStateException("Not allowed");
-        if (text == null || text.isBlank()) throw new IllegalArgumentException("text required");
-
-        comments.insertRaw(postId, userId, text.trim());
-        Long id = comments.lastInsertId();
-        var saved = comments.findById(id).orElseThrow();
-
-        CommentDto dto = new CommentDto();
-        dto.id = saved.getId();
-        dto.postId = postId;
-        dto.authorId = saved.getAuthor() != null ? saved.getAuthor().getId() : userId;
-        dto.authorUsername = profiles.findByUserId(dto.authorId).map(UserProfile::getUsername).orElse(null);
-        dto.text = saved.getContent();
-        dto.createdAt = saved.getCreatedAt();
-        return dto;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public CommentPage listComments(Long userId, Long postId, Instant cursor, int limit) {
-        Post post = posts.findById(postId).orElseThrow();
-        if (!canSee(userId, post)) throw new IllegalStateException("Not allowed");
-        if (cursor == null) cursor = Instant.now();
-        limit = Math.max(1, Math.min(limit, 50));
-
-        var list = comments.pageByPost(postId, cursor, PageRequest.of(0, limit));
-        var dtos = list.stream().map(c -> {
-            CommentDto d = new CommentDto();
-            d.id = c.getId();
-            d.postId = postId;
-            var au = c.getAuthor();
-            d.authorId = (au != null) ? au.getId() : null;
-            d.authorUsername = (d.authorId == null) ? null
-                    : profiles.findByUserId(d.authorId).map(UserProfile::getUsername).orElse(null);
-            d.text = c.getContent();
-            d.createdAt = c.getCreatedAt();
-            return d;
-        }).toList();
-
-        Instant next = dtos.isEmpty() ? null : dtos.get(dtos.size() - 1).createdAt;
-        CommentPage page = new CommentPage();
-        page.items = dtos;
-        page.nextCursor = next;
-        return page;
-    }
-
 
     // ---------- NEW: update / delete ----------
     @Override
@@ -313,11 +217,14 @@ public class PostServiceImpl implements PostService {
         if (p.getVisibility() == Visibility.PUBLIC) return true;
         Long authorId = p.getAuthor().getId();
         if (Objects.equals(authorId, requesterId)) return true;
-        if (p.getVisibility() == Visibility.FRIENDS) {
-            return followers.isFriend(requesterId, authorId);
-        }
-        return false; // PRIVATE and not owner
+
+        return switch (p.getVisibility()) {
+            case FRIENDS -> followers.isFriend(requesterId, authorId) || followers.isBestFriend(requesterId, authorId);
+            case BEST_FRIEND -> followers.isBestFriend(requesterId, authorId);
+            default -> false; // PRIVATE
+        };
     }
+
 
     private PostDto toDto(Post p) {
         PostDto dto = new PostDto();

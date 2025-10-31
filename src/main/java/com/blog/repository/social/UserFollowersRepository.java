@@ -73,4 +73,13 @@ public interface UserFollowersRepository extends JpaRepository<UserFollower, Lon
 
     @Query("select uf.following.id from UserFollower uf where uf.follower.id=:userId")
     List<Long> followingIds(Long userId);
+
+    @Query("""
+    select (count(uf) > 0) from UserFollower uf
+    where uf.follower.id = :viewerId
+    and uf.following.id = :authorId
+    and uf.relationType in (com.blog.entity.social.RelationType.BEST_FRIEND)
+    """)
+    boolean isBestFriend(@Param("viewerId") Long viewerId,
+                     @Param("authorId") Long authorId);
 }

@@ -21,12 +21,11 @@ public interface PostService {
     List<PostDto> getUserPosts(Long requesterId, Long profileUserId, Instant cursor, int limit);
     PostDto getById(Long requesterId, Long postId);
 
-    // NEW
-    ReactionDto react(Long userId, Long postId, short reactionTypeId);
-    void unreact(Long userId, Long postId);
-
-    CommentDto addComment(Long userId, Long postId, String text);
-    CommentPage listComments(Long userId, Long postId, Instant cursor, int limit);
+//    ReactionDto react(Long userId, Long postId, short reactionTypeId);
+//    void unreact(Long userId, Long postId);
+//
+//    CommentDto addComment(Long userId, Long postId, String text);
+//    CommentPage listComments(Long userId, Long postId, Instant cursor, int limit);
 
     PostDto update(Long userId, Long postId, UpdatePostRequest req);
     void delete(Long userId, Long postId);

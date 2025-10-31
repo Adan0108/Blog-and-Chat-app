@@ -4,6 +4,8 @@ import com.blog.entity.blog.Post;
 import com.blog.entity.user.User;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "user_comments", indexes = {
@@ -23,6 +25,13 @@ public class Comment {
 
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "parent_id")
     private Comment parent;
+
+    // NEW: bidirectional children mapping for cascade delete of reply trees
+    @OneToMany(mappedBy = "parent",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @OrderBy("createdAt ASC")
+    private List<Comment> children = new ArrayList<>();
 
     @Lob @Column(nullable = false)
     private String content;
@@ -45,6 +54,9 @@ public class Comment {
 
     public Comment getParent() { return parent; }
     public void setParent(Comment parent) { this.parent = parent; }
+
+    public List<Comment> getChildren() { return children; }
+    public void setChildren(List<Comment> children) { this.children = children; }
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }

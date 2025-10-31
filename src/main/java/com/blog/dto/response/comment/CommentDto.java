@@ -9,4 +9,6 @@ public class CommentDto {
     public String authorUsername;
     public String text;
     public Instant createdAt;
+    public Long parentId;
 }
+
