@@ -17,54 +17,70 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     @Query(value = """
         SELECT id FROM (
-          SELECT 
+          SELECT
             p.id,
             p.user_id,
             p.created_at,
             ROW_NUMBER() OVER (PARTITION BY p.user_id ORDER BY p.created_at DESC) AS rn,
-            /* friend weight: 1 if FRIEND/BEST_FRIEND between viewer and author */
-            (
-              SELECT 1
-              FROM user_followers uf
-              WHERE uf.follower_id = :viewerId 
-                AND uf.following_id = p.user_id
-                AND uf.relation_type IN ('FRIEND','BEST_FRIEND')
-              LIMIT 1
-            ) AS rel_weight,
+        
+            /* viewer is author */
+            (p.user_id = :viewerId) AS self_weight,
+        
+            /* single join to inspect relationship from viewer -> author */
+            COALESCE(
+              CASE uf.relation_type
+                WHEN 'BEST_FRIEND' THEN 1000   /* biggest boost */
+                WHEN 'FRIEND'      THEN  400   /* mutual */
+                WHEN 'FOLLOWER'    THEN  120   /* one-way follow */
+                ELSE 0
+              END,
+            0) AS rel_score,
+        
             /* freshness + engagement */
             TIMESTAMPDIFF(SECOND, p.created_at, NOW()) AS age_sec,
             (SELECT COUNT(*) FROM post_reactions r WHERE r.post_id = p.id) AS react_cnt,
-            (SELECT COUNT(*) FROM user_comments c WHERE c.post_id = p.id) AS cmt_cnt
+            (SELECT COUNT(*) FROM user_comments  c WHERE c.post_id = p.id) AS cmt_cnt
+        
           FROM posts p
-          WHERE 
+          LEFT JOIN user_followers uf
+            ON uf.follower_id  = :viewerId
+           AND uf.following_id = p.user_id
+        
+          WHERE
             p.created_at < :cursor
             AND (
+              /* own posts always visible */
               p.user_id = :viewerId
+        
+              /* public visible to all */
               OR p.visibility = 'PUBLIC'
+        
+              /* FRIENDS/BEST_FRIEND: single check since your DB promotes to FRIEND on mutual */
               OR (
-                   p.visibility = 'FRIENDS'
-                   AND EXISTS (
-                        SELECT 1 FROM user_followers uf2
-                        WHERE uf2.follower_id = :viewerId 
-                          AND uf2.following_id = p.user_id
-                          AND uf2.relation_type IN ('FRIEND','BEST_FRIEND')
-                   )
+                p.visibility = 'FRIENDS'
+                AND uf.relation_type IN ('FRIEND','BEST_FRIEND')
               )
+        
+              /* if you also have BEST_FRIEND-only visibility, gate it here similarly:
+                 OR (p.visibility = 'BEST_FRIEND' AND uf.relation_type = 'BEST_FRIEND')
+              */
             )
         ) x
         WHERE x.rn <= :perAuthorCap
-        ORDER BY 
-          (CASE WHEN x.rel_weight = 1 THEN 1000 ELSE 0 END)
+        ORDER BY
+            (CASE WHEN x.self_weight THEN 1200 ELSE 0 END)
+          + x.rel_score
           + (x.react_cnt * 3 + x.cmt_cnt * 5)
-          - (x.age_sec / 300) DESC,
+          - (x.age_sec / 300)
+          DESC,
           x.created_at DESC
         LIMIT :limit
         """, nativeQuery = true)
-
     List<Long> getFeedIds(@Param("viewerId") Long viewerId,
                           @Param("cursor") Instant cursor,
                           @Param("perAuthorCap") int perAuthorCap,
                           @Param("limit") int limit);
+
 
     @Query("""
       select p from Post p
