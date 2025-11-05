@@ -55,4 +55,16 @@ public final class JwtUtil {
     public static Jws<Claims> verifyRefresh(String token, String privateKeyForRT) {
         return Jwts.parserBuilder().setSigningKey(hmac(privateKeyForRT)).build().parseClaimsJws(token);
     }
+
+    public static Duration remainingTtl(String token, String secret) {
+        var jws = Jwts.parserBuilder()
+                .setSigningKey(hmac(secret)) // verify signature with provided secret
+                .build()
+                .parseClaimsJws(token);
+
+        Date exp = jws.getBody().getExpiration();
+        long diffMs = exp.getTime() - System.currentTimeMillis();
+        return diffMs > 0 ? Duration.ofMillis(diffMs) : Duration.ZERO;
+    }
+
 }

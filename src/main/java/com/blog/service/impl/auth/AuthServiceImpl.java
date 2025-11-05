@@ -14,6 +14,7 @@ import com.blog.repository.security.UserSessionRepository;
 import com.blog.repository.user.UserProfileRepository;
 import com.blog.repository.user.UserRepository;
 import com.blog.service.auth.AuthService;
+import com.blog.service.auth.TokenBlacklistService; // [ADDED]
 import jakarta.transaction.Transactional;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,13 +31,14 @@ public class AuthServiceImpl implements AuthService {
 
     public static final String HDR_CLIENT_ID = "x-client-id";
     public static final String HDR_AUTHZ     = "authorization";
-    public static final String HDR_REFRESH   = "x-rtoken-id";
+    public static final String HDR_REFRESH   = "x-rtoken-id"; // [CHANGED] kept for compatibility, no longer used
 
     private final UserRepository users;
     private final UserProfileRepository profiles;
     private final UserKeyPairRepository keypairs;
     private final UserSessionRepository sessions;
     private final PasswordEncoder encoder;
+    private final TokenBlacklistService blacklist; // [ADDED]
 
     private final SecureRandom rng = new SecureRandom();
     private final HexFormat hex = HexFormat.of();
@@ -45,12 +47,14 @@ public class AuthServiceImpl implements AuthService {
                            UserProfileRepository profiles,
                            UserKeyPairRepository keypairs,
                            UserSessionRepository sessions,
-                           PasswordEncoder encoder) {
+                           PasswordEncoder encoder,
+                           TokenBlacklistService blacklist) { // [ADDED]
         this.users = users;
         this.profiles = profiles;
         this.keypairs = keypairs;
         this.sessions = sessions;
         this.encoder = encoder;
+        this.blacklist = blacklist; // [ADDED]
     }
 
     @Override
@@ -71,16 +75,16 @@ public class AuthServiceImpl implements AuthService {
 
         String baseUsername = req.name() == null ? ("user" + u.getId())
                 : req.name().trim().toLowerCase()
-                .replaceAll("[^a-z0-9]+", "_")      // collapse non-alphanum into single _
-                .replaceAll("^_+|_+$", "");         // trim leading/trailing _
-        if (baseUsername.isBlank()) baseUsername = "user"; // fallback
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (baseUsername.isBlank()) baseUsername = "user";
 
         p.setUsername(baseUsername + "_" + u.getId());
-        profiles.save(p); // <-- FIXED: use the injected field name
+        profiles.save(p);
 
         // Create keypair
         UserKeyPair kp = new UserKeyPair();
-        kp.setUser(u);                 // @MapsId – do not set userId manually
+        kp.setUser(u);
         kp.setPublicKey(secret());
         kp.setPrivateKey(secret());
         keypairs.save(kp);
@@ -118,7 +122,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse refresh(Long userId, String refreshToken) {
-        User u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found"));
+        User u  = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found"));
         UserKeyPair kp = keypairs.findByUserId(userId).orElseThrow(() -> new IllegalArgumentException("KeyPair not found"));
 
         var jws = JwtUtil.verifyRefresh(refreshToken, kp.getPrivateKey());
@@ -126,8 +130,9 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("Invalid user");
         }
 
-        String jti = jws.getBody().getId();
-        var sess = sessions.findActive(userId, jti, Instant.now())
+        String oldJti = jws.getBody().getId();
+
+        var sess = sessions.findActive(userId, oldJti, Instant.now())
                 .orElseThrow(() -> new IllegalStateException("Session revoked/expired"));
 
         String newJti = UUID.randomUUID().toString();
@@ -136,20 +141,28 @@ public class AuthServiceImpl implements AuthService {
         sess.setExpiresAt(Instant.now().plus(JwtUtil.REFRESH_TTL));
         sessions.save(sess);
 
+        // NEW: also blacklist the old JTI so any lingering AT with oldJti dies instantly
+        // Use your access TTL (or a conservative upper bound) as the blacklist TTL.
+        blacklist.blacklist(userId, oldJti, JwtUtil.ACCESS_TTL);
+
         TokenPair tokens = JwtUtil.createTokenPair(userId, u.getEmail(), kp.getPublicKey(), kp.getPrivateKey(), newJti);
         return new AuthResponse(userId, u.getEmail(), tokens);
     }
 
     @Override
     public void logout(Long userId, String accessHeader) {
-        UserKeyPair kp = keypairs.findByUserId(userId).orElseThrow(() -> new IllegalArgumentException("KeyPair not found"));
+        UserKeyPair kp = keypairs.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("KeyPair not found"));
         String token = extract(accessHeader);
         var jws = JwtUtil.verifyAccess(token, kp.getPublicKey());
         String jti = jws.getBody().getId();
 
+        // Revoke session in DB (existing behavior)
         int n = sessions.revoke(userId, jti);
         if (n == 0) throw new IllegalStateException("Session not found / already revoked");
-        // TODO: Add Redis blacklist later for AT if needed
+
+        var ttl = JwtUtil.remainingTtl(token, kp.getPublicKey());
+        blacklist.blacklist(userId, jti, ttl);
     }
 
     private String secret() {
