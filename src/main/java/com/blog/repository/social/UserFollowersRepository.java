@@ -82,4 +82,14 @@ public interface UserFollowersRepository extends JpaRepository<UserFollower, Lon
     """)
     boolean isBestFriend(@Param("viewerId") Long viewerId,
                      @Param("authorId") Long authorId);
+
+    @Query("""
+        select uf.relationType from UserFollower uf
+        where uf.follower.id = :fromId and uf.following.id = :toId
+    """)
+    RelationType getRelation(Long fromId, Long toId);
+
+    default boolean hasEdge(Long fromId, Long toId) {
+        return getRelation(fromId, toId) != null;
+    }
 }
